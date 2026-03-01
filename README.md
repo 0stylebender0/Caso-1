@@ -15,5 +15,5 @@ extrayendo y mapeando automáticamente la información relevante al template ofi
 
 ## Autores
 
-Daniel Campos
-Kevin Espinoza
+- Daniel Campos
+- Kevin Espinoza
