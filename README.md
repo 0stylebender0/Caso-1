@@ -14,3 +14,38 @@ This project aims to automate this process through artificial intelligence, auto
 
 - Daniel Campos
 - Kevin Espinoza
+
+---
+
+# FrontEnd design
+
+## 1.1 Technology stack:
+- Application type:                             Single Page Application (SPA)
+- Web framework:                                Angular 19.2 - Node.js 22 LTS
+- Web server:                                   Express.js 5.1
+- Coding Language:                              TypeScript 5.7
+- Unit testing framework:                       Jasmine 5.6 + Karma 6.4
+- Data validation framework:                    Joi 17.13
+- Code prettier framework:                      Prettier 3.5
+- Code style framework:                         ESLint 9.22 + Angular ESLint 19.2
+- Integration testing tools:                    Cypress 14.3
+- Cloud service:                                Amazon Web Services (AWS)
+- Hosted services within the cloud service:     AWS Lambda, AWS API Gateway, AWS Textract, AWS Bedrock
+- Code repositories service:                    GitLab
+- Code automation task tool:                    Husky 10.1
+- CI/CD pipelines technology:                   GitLab CI/CD 17.5
+- Environments:                                 Development, staging, production
+- Environment deployments tools:                GitLab Environments
+- Observability framework:                      AWS CloudWatch + X-Ray
+
+## 1.2 UX UI analysis:
+
+## 1.3 Component design strategy:
+
+## 1.4 Security:
+
+## 1.5 Layered design:
+
+## 1.6 Design patterns:
+
+# BackEnd design
