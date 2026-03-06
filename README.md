@@ -40,6 +40,39 @@ This project aims to automate this process through artificial intelligence, auto
 
 ## 1.2 UX UI analysis:
 
+### Core business process
+
+#### Login
+The user enters their credentials and the system verifies their identity. If correct, the user gains access to the system. If not, the system indicates the credentials are invalid and allows the user to try again.
+
+#### Load the folder
+The user indicates the location of the folder containing the source documents. The system validates that the folder exists and contains recognizable files. The system then shows a summary of what it found: how many files and of what type. The user confirms they want to start the processing.
+
+#### Progress monitoring
+The system begins processing the documents. The user can see which stage the process is currently in: file reading, data extraction, template mapping. If an error occurs with any file, the system notifies the user without stopping the rest of the processing. When finished, the system notifies the user that the result is ready.
+
+#### Obtaining the result
+The user accesses the pre-filled DUA. They can review each field and see how confident the system is about the extracted information. If a field requires correction, the user edits it directly. Once satisfied with the review, the user downloads the final Word document.
+
+#### Logout
+The user ends their session. The system securely terminates the session and returns to the login screen.
+
+#### Wireframes
+- Login screen
+![Login](/media/login.png)
+
+- Select DUA template and source folder
+![DUA Template and folder selection](/media/template-and-folder.png)
+
+- Monitoring progress
+![Monitoring](/media/monitoring.png)
+
+- Final result
+![Result](/media/final-result.png)
+
+
+### UX test results
+
 ## 1.3 Component design strategy:
 
 ## 1.4 Security:
