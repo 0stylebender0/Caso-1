@@ -98,6 +98,11 @@ The user ends their session. The system securely terminates the session and retu
 
 ## 1.3 Component design strategy
 
+Framework: 		Angular
+Design strategy: 	Feature-based modular architecture
+
+---
+
 The frontend follows a feature-based modular architecture, where each core business process maps to an isolated Angular module with its own components, services, and routing:
 
 - **AuthModule** → Login, session management
@@ -106,7 +111,18 @@ The frontend follows a feature-based modular architecture, where each core busin
 - **ReviewModule** → DUA field viewer, confidence indicators, inline editing
 - **SharedModule** → Reusable UI elements (buttons, modals, status badges, confidence color coding)
 
-Reusability is achieved through a SharedModule containing presentational components (buttons, modals, status badges, confidence indicators) that receive data via `@Input()` and emit events via `@Output()`, decoupling UI from business logic. Styles and branding are centralized using SCSS design tokens (colors, typography, spacing) defined globally and consumed across all components, ensuring visual consistency — including the confidence color scheme (green/yellow/red). Responsiveness is handled via Angular CDK's BreakpointObserver combined with CSS Flexbox/Grid, adapting layouts for desktop and tablet, the primary target devices for customs agents. Internationalization is managed through Angular i18n, with translation files structured per locale (Spanish as default, English as secondary), allowing the UI to scale to other markets without structural changes.
+---
+
+- Reusability is achieved through a SharedModule containing presentational components (buttons, modals, status badges, confidence indicators) that receive data via @Input() and emit events via @Output(), decoupling UI from business logic.
+
+- Styles and branding are centralized using SCSS design tokens (colors, typography, spacing) defined globally and consumed across all components, ensuring visual consistency — including the confidence color scheme (green/yellow/red). 
+
+- Responsiveness is handled via Angular CDK's BreakpointObserver combined with CSS Flexbox/Grid, adapting layouts for desktop and tablet, the primary target devices for customs agents.
+
+- Internationalization is managed through Angular i18n, with translation files structured per locale (Spanish as default, English as secondary), allowing the UI to scale to other markets without structural changes.
+
+---
+The following stategies were also taken in consideration:
 
 | Strategy | Year | Reusability | Internationalization | Responsiveness | Advantages | Disadvantages |
 |---|---|---|---|---|---|---|
