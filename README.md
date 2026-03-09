@@ -73,6 +73,29 @@ The user ends their session. The system securely terminates the session and retu
 
 ### UX test results
 
+**Used Tool:** Maze and figma
+**Date:** March 2025  
+**Participants:** 3  
+**Method:** Unmoderated remote test  
+
+#### Login
+![Metrics](/media/login-metrics.png)
+![Heatmap](/media/heatmap-login.jpg)
+
+#### Template selection, file upload and start process
+![Metrics](/media/template-metrics.png)
+![Heatmap](/media/heatmap-template.jpg)
+
+#### Progress following
+![Metrics](/media/progress-metrics.png)
+![Heatmap](/media/heatmap-progress.jpg)
+
+#### Results
+![Heatmap](/media/heatmap-result.jpg)
+
+#### Qualitative Feedback
+![Opinion scale](/media/opinion-scale.png)
+
 ## 1.3 Component design strategy:
 
 ## 1.4 Security:
