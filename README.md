@@ -73,7 +73,25 @@ The user ends their session. The system securely terminates the session and retu
 
 ### UX test results
 
-## 1.3 Component design strategy:
+## 1.3 Component design strategy
+
+The frontend follows a feature-based modular architecture, where each core business process maps to an isolated Angular module with its own components, services, and routing:
+
+- **AuthModule** → Login, session management
+- **UploadModule** → Folder selection, file validation summary
+- **MonitorModule** → Real-time progress tracking per processing stage
+- **ReviewModule** → DUA field viewer, confidence indicators, inline editing
+- **SharedModule** → Reusable UI elements (buttons, modals, status badges, confidence color coding)
+
+Reusability is achieved through a SharedModule containing presentational components (buttons, modals, status badges, confidence indicators) that receive data via `@Input()` and emit events via `@Output()`, decoupling UI from business logic. Styles and branding are centralized using SCSS design tokens (colors, typography, spacing) defined globally and consumed across all components, ensuring visual consistency — including the confidence color scheme (green/yellow/red). Responsiveness is handled via Angular CDK's BreakpointObserver combined with CSS Flexbox/Grid, adapting layouts for desktop and tablet, the primary target devices for customs agents. Internationalization is managed through Angular i18n, with translation files structured per locale (Spanish as default, English as secondary), allowing the UI to scale to other markets without structural changes.
+
+| Strategy | Year | Reusability | Internationalization | Responsiveness | Advantages | Disadvantages |
+|---|---|---|---|---|---|---|
+| **Angular Material + CDK** | 2016 | High – prebuilt component library, theme system | Angular i18n + CDK a11y | CDK BreakpointObserver + Flex Layout | Mature, Angular-native, consistent design system | Opinionated styling, heavy theming customization effort |
+| **PrimeNG** | 2016 | High – 90+ prebuilt components, theming API | Built-in i18n config object | Built-in responsive grid per component | Fast development, feature-rich, minimal setup | Less control over styling, external dependency risk |
+| **Standalone Components + SCSS Tokens** | 2022 | High – self-contained, no NgModule needed, SharedModule pattern | Angular i18n or ngx-translate | CSS Grid/Flexbox + manual media queries | Lightweight, full control, modern Angular standard | More initial boilerplate, no prebuilt UI components |
+| **Nx Design System + Storybook** | 2018 | Very High – monorepo shared UI library, publishable libs | ngx-translate per library | Responsive utilities per component | Ideal for large teams, isolated component development | Overkill for small teams, steep learning curve |
+| **Ionic + Angular** | 2013 | High – mobile-first components, cross-platform | Built-in i18n support | Native mobile responsiveness, adaptive layouts | Best for mobile/tablet targets | Designed for mobile apps, not web dashboards |
 
 ## 1.4 Security:
 
