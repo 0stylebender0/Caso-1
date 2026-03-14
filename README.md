@@ -43,19 +43,48 @@ This project aims to automate this process through artificial intelligence, auto
 ### Core business process
 
 #### Login
-The user enters their credentials and the system verifies their identity. If correct, the user gains access to the system. If not, the system indicates the credentials are invalid and allows the user to try again.
 
-#### Load the folder
-The user indicates the location of the folder containing the source documents. The system validates that the folder exists and contains recognizable files. The system then shows a summary of what it found: how many files and of what type. The user confirms they want to start the processing.
+The user enters their email and password. The system validates the credentials against the user directory. If the credentials are correct, the system creates a session and redirects the user to the home screen. If the credentials are incorrect, the system displays an error message and allows the user to try again. If the user has forgotten their password, they can request a reset link to their registered email.
 
-#### Progress monitoring
-The system begins processing the documents. The user can see which stage the process is currently in: file reading, data extraction, template mapping. If an error occurs with any file, the system notifies the user without stopping the rest of the processing. When finished, the system notifies the user that the result is ready.
+#### Select DUA Template
 
-#### Obtaining the result
-The user accesses the pre-filled DUA. They can review each field and see how confident the system is about the extracted information. If a field requires correction, the user edits it directly. Once satisfied with the review, the user downloads the final Word document.
+The user arrives at the new declaration screen. The system presents the available official templates published by Ministerio de Hacienda de Costa Rica: Import, Export, Transit, and Warehouse. The user selects the template that corresponds to the operation they need to declare. Once selected, the system highlights the chosen template and enables the next step.
+
+The user then indicates the location of the source documents by dragging a folder into the designated area or typing a local or network path. The system scans the folder and identifies all readable files. It classifies each file by type: PDF, Excel, Word, or image. The system displays a summary showing how many files of each type were found. If no valid files are detected, the system notifies the user and asks them to verify the folder path. Once the user confirms the file summary is correct, they trigger the processing.
+
+#### Process Monitoring
+
+The system begins processing the documents and the user is taken to the monitoring screen. The screen shows the current job identifier so the user can reference this declaration later.
+
+The process runs through six sequential stages:
+
+**Stage 1 — File reading.** The system opens each file in the folder. For Excel and Word files, it reads the structured content directly. For PDFs, it extracts text layer by layer. For images, it queues them for OCR processing. If a file cannot be opened or is corrupted, the system logs the error and continues with the remaining files without stopping the entire job.
+
+**Stage 2 — OCR and image interpretation.** The system runs optical character recognition on each image and scanned PDF page. It attempts to reconstruct the text structure, identifying lines, columns, and blocks of information. If the image quality is too low for reliable recognition, the system flags the file with a reduced-confidence warning and continues.
+
+**Stage 3 — Semantic data extraction.** The system passes the extracted text through an AI model trained on customs terminology. The model identifies and extracts specific entities regardless of the document format or layout: importer and exporter names, tax identifiers, supplier information, commercial and tariff descriptions of goods, quantities, weights, FOB and CIF values, Incoterms, transport details, invoice numbers and dates, country of origin, and the applicable customs regime. Each extracted value is assigned a confidence score based on how clearly and consistently it appeared across the source documents.
+
+**Stage 4 — Mapping to the official DUA template.** The system maps each extracted value to its corresponding field in the official DUA template selected by the user in the previous screen. Fields that appear in multiple source documents are cross-referenced and the most consistent value is selected. Fields where the extracted data is ambiguous or contradictory are flagged for review.
+
+**Stage 5 — Consistency validation.** The system performs logical checks across the mapped fields: it verifies that value totals are internally consistent, that currencies are uniform, that dates are chronologically valid, that the declared weight matches across documents, and that the country of origin is coherent with the supplier information. Any inconsistency is logged and the affected fields are marked accordingly.
+
+**Stage 6 — Word document generation.** The system produces a .docx file using the official DUA template. Each field is filled with the extracted and validated value. Fields are color-coded based on their confidence level. The document is stored and made available for download.
+
+Throughout the entire process, the user sees a progress bar and a live log that shows each file as it is processed, including any warnings or errors. The user does not need to take any action during this stage. When all six stages are complete, the system notifies the user that the result is ready and redirects them to the result screen.
+
+#### Review and Download Result
+
+The user arrives at the result screen and sees the pre-filled DUA organized into sections that mirror the official template structure.
+
+Each field displays its extracted value and is visually coded by confidence level. Fields marked in green were extracted with high confidence and are consistent across source documents. Fields marked in yellow were extracted with medium confidence, meaning the value was found but in an ambiguous context or with minor inconsistencies across documents. Fields marked in red could not be reliably extracted or failed a consistency check, and require the user to provide or correct the value manually.
+
+The user reviews each section in order: declarant data, goods description, values and transport, and supporting documents. If a field requires correction, the user clicks on it and enters the correct value directly. The system saves the edit and updates the confidence indicator for that field to reflect that it was manually validated.
+
+Once the user has reviewed all fields and corrected the ones marked in red, they download the final .docx file. The downloaded document contains the completed DUA ready to be reviewed by the customs agent before submission to the authority.
 
 #### Logout
-The user ends their session. The system securely terminates the session and returns to the login screen.
+
+The user ends the session. The system invalidates the active session token, clears any temporary data from the browser, and redirects the user to the login screen.
 
 #### Wireframes
 - Login screen
@@ -122,16 +151,6 @@ The frontend follows a feature-based modular architecture, where each core busin
 - Internationalization is managed through Angular i18n, with translation files structured per locale (Spanish as default, English as secondary), allowing the UI to scale to other markets without structural changes.
 
 ---
-The following stategies were also taken in consideration:
-
-| Strategy | Year | Reusability | Internationalization | Responsiveness | Advantages | Disadvantages |
-|---|---|---|---|---|---|---|
-| **Angular Material + CDK** | 2016 | High – prebuilt component library, theme system | Angular i18n + CDK a11y | CDK BreakpointObserver + Flex Layout | Mature, Angular-native, consistent design system | Opinionated styling, heavy theming customization effort |
-| **PrimeNG** | 2016 | High – 90+ prebuilt components, theming API | Built-in i18n config object | Built-in responsive grid per component | Fast development, feature-rich, minimal setup | Less control over styling, external dependency risk |
-| **Standalone Components + SCSS Tokens** | 2022 | High – self-contained, no NgModule needed, SharedModule pattern | Angular i18n or ngx-translate | CSS Grid/Flexbox + manual media queries | Lightweight, full control, modern Angular standard | More initial boilerplate, no prebuilt UI components |
-| **Nx Design System + Storybook** | 2018 | Very High – monorepo shared UI library, publishable libs | ngx-translate per library | Responsive utilities per component | Ideal for large teams, isolated component development | Overkill for small teams, steep learning curve |
-| **Ionic + Angular** | 2013 | High – mobile-first components, cross-platform | Built-in i18n support | Native mobile responsiveness, adaptive layouts | Best for mobile/tablet targets | Designed for mobile apps, not web dashboards |
-
 
 ## 1.4 Security:
 
