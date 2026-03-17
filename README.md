@@ -154,6 +154,112 @@ The frontend follows a feature-based modular architecture, where each core busin
 
 ## 1.4 Security:
 
+The DUA Streamliner applies a defense-in-depth security model, combining identity management, access control, secrets management, and transport-layer protections. Every layer is aligned with the Angular 19.2 / AWS / Azure Entra ID stack already defined in this document.
+
+---
+
+Authentication
+
+Authentication is fully delegated to Azure Entra ID, which acts as the centralized identity provider for all users of the platform. The Angular SPA uses the MSAL (Microsoft Authentication Library) for Angular to initiate and handle the OAuth 2.0 / OpenID Connect flows.
+
+- Protocol: OAuth 2.0 Authorization Code Flow with PKCE (Proof Key for Code Exchange).
+- Token types issued: ID Token (user identity), Access Token (API calls), Refresh Token (session renewal).
+- All tokens are stored in memory only — never in `localStorage` or `sessionStorage` — to prevent XSS-based token theft.
+- Token expiry and renewal are managed transparently by MSAL, with silent token refresh via hidden iframes before expiry.
+- The server name registered in Azure Entra ID for this application is:
+
+```
+customsidentityserver
+```
+
+---
+
+Multi-Factor Authentication (MFA)
+
+MFA is enforced for all user accounts through Conditional Access Policies configured in Azure Entra ID. The only accepted second factor is a mobile authenticator application (e.g., Microsoft Authenticator), generating time-based one-time passwords (TOTP).
+
+- SMS-based OTP and email OTP are explicitly disabled to prevent SIM-swap and phishing attacks.
+- Hardware tokens are not supported in the current scope.
+- MFA step-up is automatically triggered by Conditional Access on every new session, regardless of location or device, to comply with customs authority data protection requirements.
+
+---
+
+Single Sign-On (SSO)
+
+SSO is enabled through **Azure Entra ID**, allowing users to authenticate once and access all integrated services (Angular SPA, AWS API Gateway, reporting dashboards) without re-entering credentials. The SSO session lifetime and idle timeout are managed by Azure Entra ID Conditional Access policies and are not controlled at the application level.
+
+---
+
+Authorization — Roles and Permissions
+
+The system defines two application roles, assigned per user in Azure Entra ID App Registrations. The Angular frontend reads the `roles` claim from the decoded ID Token to conditionally render UI elements, while the backend Lambda functions validate the Access Token and enforce the same rules server-side.
+
+Manager
+
+Users with the Manager role are responsible for platform administration, user governance, and template management. They do not perform customs declarations.
+
+| Permission Code | Description |
+|---|---|
+| `MANAGE_USERS` | Create, update, deactivate, and assign roles to user accounts. |
+| `VIEW_REPORTS` | Access operational and performance reports including processing times, error rates, and agent activity. |
+| `EDIT_TEMPLATES` | Add, modify, or retire DUA templates published by the Ministerio de Hacienda de Costa Rica. |
+
+Customs Agent
+
+Users with the **Customs Agent** role are the primary operators of the system. They upload source documents, trigger AI processing, review results, and download the generated DUA. They have no access to administrative or reporting functions.
+
+| Permission Code | Description |
+|---|---|
+| `LOAD_FILES` | Select and upload a folder containing source documents (PDF, Excel, Word, images) for a declaration. |
+| `GENERATE_DUA` | Initiate the AI processing pipeline that extracts, maps, and validates data into the DUA template. |
+| `DOWNLOAD_DUA` | Download the generated and reviewed `.docx` DUA file. |
+
+---
+
+Secrets Management — Azure Key Vault
+
+All sensitive configuration is stored in **Azure Key Vault** and is never hardcoded in source code, CI/CD pipeline variables, or environment files committed to GitLab. The following categories of secrets are managed through the vault:
+
+- Environment variables per environment (development, staging, production).
+- API keys for AWS services (Textract, Bedrock, Lambda invocation).
+- Azure Entra ID application client secrets and certificate thumbprints.
+- Any third-party integration credentials.
+
+At runtime, backend Lambda functions retrieve secrets using the AWS Secrets Manager / Azure Key Vault integration via the AWS Parameter Store bridge. The Angular frontend never accesses the vault directly; all secrets it requires are injected as environment-specific configuration by the CI/CD pipeline at build time, limited strictly to non-sensitive values (e.g., the Entra ID tenant ID and client ID, which are public by design in OAuth 2.0 flows).
+
+---
+
+Transport Security
+
+- All communication between the Angular SPA and AWS API Gateway is enforced over TLS 1.2+ with HSTS headers.
+- AWS API Gateway is configured to reject requests with TLS versions below 1.2.
+- CORS is configured at the API Gateway level, whitelisting only the production, staging, and development origins.
+- AWS CloudFront is used as the CDN for the Angular SPA, providing DDoS mitigation and edge-level TLS termination.
+
+---
+
+Session Management
+
+Sessions are managed by Azure Entra ID in combination with the MSAL Angular library. The following controls apply:
+
+- On logout, MSAL clears all in-memory tokens and triggers an Entra ID end-session request to invalidate the server-side session.
+- Browser storage (`localStorage`, `sessionStorage`) is never used to persist tokens or session state.
+- Idle session timeout is enforced via Conditional Access Policy in Entra ID, set to **60 minutes** of inactivity, after which the user must re-authenticate.
+- Concurrent sessions from multiple devices are permitted but each maintains an independent token lifecycle.
+
+---
+
+Security Observability and Audit
+
+Security-relevant events are logged and monitored using the observability stack defined in section 1.1 (AWS CloudWatch + X-Ray). The following event categories are captured:
+
+- Authentication events: successful logins, failed login attempts, MFA challenges, and token refresh cycles — sourced from Azure Entra ID sign-in logs forwarded to CloudWatch via Azure Monitor Diagnostic Settings.
+- Authorization failures: any API Gateway request rejected due to an invalid or insufficient Access Token.
+- Secrets access: all Key Vault read operations are logged with actor identity and timestamp.
+- File processing events: each document processed by AWS Textract and Bedrock is logged with the job identifier, user identity, and processing outcome.
+
+Alerts are configured in CloudWatch Alarms to notify the Manager role when anomalous patterns are detected, such as repeated authentication failures or unusual API call volumes.
+
 ## 1.5 Layered design:
 
 ## 1.6 Design patterns:
