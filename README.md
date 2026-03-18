@@ -260,7 +260,220 @@ Security-relevant events are logged and monitored using the observability stack 
 
 Alerts are configured in CloudWatch Alarms to notify the Manager role when anomalous patterns are detected, such as repeated authentication failures or unusual API call volumes.
 
-## 1.5 Layered design:
+## 1.5 Layered Design
+
+The frontend of DUA Streamliner is structured as a set of well-defined, vertically stacked layers where each layer has a single responsibility and communicates only with the layers adjacent to it. This separation prevents business logic from leaking into the UI, keeps external dependencies isolated, and makes each concern independently testable. The following describes each layer in detail, using the technology stack defined in section 1.1.
+
+---
+
+### SSR Layer — Express.js + Angular Universal
+
+When a user navigates to the application, the request is received by an Express.js 5.1 server running on Node.js 22 LTS. Express handles Server-Side Rendering (SSR) by invoking Angular Universal to render the initial HTML on the server before sending it to the browser. This means the browser receives a fully-formed HTML document on the first load rather than an empty shell, which improves perceived performance and allows the Authentication Layer to be evaluated before any client-side JavaScript runs.
+
+Express is also responsible for injecting environment-specific configuration into the rendered page at startup time. This configuration — such as the Azure Entra ID tenant ID and client ID — is pulled from the Settings Layer before the server begins serving requests.
+
+---
+
+### Authentication Layer — Azure Entra ID + MSAL Angular
+
+Immediately after the SSR request is handled, the Authentication Layer is evaluated. This layer is implemented using the MSAL (Microsoft Authentication Library) for Angular, which integrates with Azure Entra ID as the identity provider via the OAuth 2.0 Authorization Code Flow with PKCE.
+
+Angular route guards implemented with `CanActivateFn` intercept every navigation event. If the user does not have a valid in-memory Access Token, the guard redirects them to the Azure Entra ID login page. Upon successful authentication, Entra ID returns an ID Token, an Access Token, and a Refresh Token. MSAL stores all tokens exclusively in memory — never in `localStorage` or `sessionStorage` — and handles silent token renewal automatically before expiry.
+
+The roles claim embedded in the decoded ID Token is read by this layer and made available to the Components Layer so that UI elements can be conditionally rendered based on whether the user holds the `Manager` or `Customs Agent` role. No routing is permitted until this layer confirms a valid, active session.
+
+---
+
+### Components Layer — Atomic Design
+
+Once authentication is confirmed, Angular renders the component tree that corresponds to the current route. Components are organized following Atomic Design methodology, structured into five levels of increasing complexity:
+
+**Atoms** are the smallest indivisible UI elements: input fields, buttons, confidence badges (green, yellow, red), progress bar segments, file type icons, and label chips. Each atom is a standalone Angular component with no dependencies on services or state.
+
+**Molecules** are combinations of atoms that together form a functional UI unit: a form field composed of a label atom, an input atom, and a validation message atom; a file summary card composed of a file type icon atom and a count label atom; or a processing stage row composed of a status dot atom, a stage label atom, and a status tag atom.
+
+**Organisms** are larger, self-contained sections of the interface: the credential form organism on the login screen, the template selection grid organism, the folder drop zone organism, the processing stage list organism with its live log, and the DUA field section organisms on the result screen (Section A, Section B, Section C). Organisms are aware of application state and interact with the Hooks Layer.
+
+**Templates** define the layout structure of a screen without containing real data. They arrange organisms into a spatial grid, establish the header and navigation bar, and define how content regions are distributed. Templates are reusable across pages that share the same structural layout.
+
+**Pages** are Angular routed components that bind a template to real data. Each page corresponds to one screen in the application: LoginPage, TemplateSelectorPage, ProcessMonitoringPage, and ResultPage. Pages are the entry point for route guards and are responsible for initiating the data flow that populates their template and organisms.
+
+---
+
+### Hooks Layer — Angular Services injected into Components
+
+Within the Components Layer, a Hooks Layer provides the bridge between visual components and the application's business logic. In Angular, this pattern is implemented using injectable services scoped to the component or module level, combined with RxJS observables that components subscribe to via the `async` pipe.
+
+Each organism or page component receives its dependencies through Angular's dependency injection system rather than instantiating them directly. This means a component never knows how data is fetched or how an operation is executed — it only knows what to render and what action to trigger. For example, the ProcessMonitoringPage component subscribes to a `jobStatus$` observable exposed by the ProcessingHookService. When the observable emits a new stage completion event, the component re-renders the affected stage row reactively without any imperative DOM manipulation.
+
+This layer is also responsible for translating user gestures (a button click, a folder drop, a field edit) into calls on the Services Layer, and for propagating the result back to the component as observable state updates.
+
+---
+
+### Services Layer — Application Business Logic
+
+The Services Layer contains all application-level operations. Services are singleton Angular injectables decorated with `providedIn: 'root'` or scoped to a specific module. They hold no UI logic and no direct DOM references. Their sole responsibility is to orchestrate the steps required to fulfill a business operation.
+
+**AuthService** manages the session lifecycle: initiating login, handling the OAuth callback, reading the roles claim from the token, triggering logout, and exposing the current user identity as an observable.
+
+**DeclarationService** handles the creation and lifecycle of a DUA declaration job: validating the selected template, submitting the source folder path to the backend, and exposing the job identifier for monitoring.
+
+**FileIngestionService** is responsible for scanning the selected folder, classifying files by type, and constructing the payload that will be sent to the backend processing pipeline.
+
+**ProcessingStatusService** polls the backend job status endpoint at a defined interval using RxJS `interval` and `switchMap`, emitting each new status update as an observable event. When the job reaches a terminal state (completed or failed), the polling subscription is automatically unsubscribed.
+
+**ResultService** fetches the pre-filled DUA fields from the backend once processing is complete, exposes them as typed observables keyed by section, and handles field-level edit submissions back to the backend.
+
+**DocumentService** handles the download of the generated `.docx` file by constructing a presigned AWS S3 URL request through the ApiClients Layer and triggering the browser download.
+
+All services delegate external communication exclusively to the ApiClients Layer and never construct HTTP requests directly.
+
+---
+
+### Utils Layer — Shared Pure Functions
+
+The Utils Layer contains stateless, pure TypeScript functions that are used across multiple layers without introducing dependencies. This layer includes date formatting and parsing utilities, currency and numeric formatters, confidence score interpreters (mapping a numeric score to the green/yellow/red classification), file type classifiers based on MIME type or extension, string sanitizers, and general-purpose TypeScript type guards used throughout the codebase.
+
+Utils functions are imported directly where needed and are fully covered by unit tests written in Jasmine 5.6 running under Karma 6.4, since their pure nature makes them trivial to test in isolation.
+
+---
+
+### ApiClients Layer — External API Abstraction
+
+The ApiClients Layer contains one class per external system that the frontend communicates with. Each class encapsulates the full communication contract with its corresponding API: the base URL, the required headers, the request construction, and the response parsing. No other layer constructs HTTP requests or parses raw HTTP responses.
+
+**BackendApiClient** communicates with AWS API Gateway, which fronts the Lambda functions that orchestrate document processing. It sends the folder metadata and template selection, polls for job status, retrieves the extracted DUA fields, and submits manual field corrections. All requests include the Bearer Access Token retrieved from the AuthService.
+
+**EntraIdApiClient** handles any direct calls to the Microsoft Graph API needed to resolve user profile information beyond what is available in the ID Token, such as display names and group memberships.
+
+Every method in an ApiClients class returns an RxJS `Observable`. All API responses are immediately passed through the DataValidation Layer before being returned to the calling service. If validation fails, the Observable emits an error that is caught by the ExceptionHandling Layer.
+
+---
+
+### Settings Layer — Environment Configuration from Azure Key Vault
+
+The Settings Layer is a singleton Angular service that provides typed access to all environment-specific configuration. During the Express.js SSR startup sequence, the server retrieves non-sensitive configuration values from Azure Key Vault using the Key Vault SDK, and injects them into the Angular application as environment tokens. The Angular Settings service reads these tokens at bootstrap time and exposes them as typed, read-only properties.
+
+Configuration managed through this layer includes the AWS API Gateway base URL per environment (development, staging, production), the Azure Entra ID tenant ID and client ID, the AWS region, the S3 bucket name for document storage, and feature flags that control which DUA template types are enabled in a given environment.
+
+The Angular frontend never accesses Azure Key Vault directly at runtime. The Settings Layer is populated once at server startup and the values flow into the client as part of the SSR-rendered page. This ensures that secrets are never exposed to the browser and that environment-specific behavior is fully controlled at the infrastructure level.
+
+ApiClients read all base URLs and configuration values exclusively through the Settings Layer, so that changing an endpoint across environments requires only a Key Vault secret update, with no code change.
+
+---
+
+### Models Layer — Shared Typed Data Structures
+
+The Models Layer defines all TypeScript interfaces, enums, and types that describe the data structures flowing through the application. This layer has no logic and no dependencies — it is a pure type definition library imported by every other layer.
+
+Key models include `DeclarationJob` (job identifier, status, timestamps, associated template), `DuaField` (field code, extracted value, confidence score, manual override flag), `DuaSection` (section identifier, ordered list of DuaFields), `FileIngestionSummary` (counts by file type, list of file metadata), `ProcessingStage` (stage name, status enum, start and end timestamps), `UserIdentity` (email, display name, assigned role), and `ApiResponse<T>` (a generic wrapper for all API responses including error envelopes).
+
+All layers import from Models, which means data structures are defined once and never duplicated. This is the only layer that every other layer is permitted to depend on freely, alongside Utils and State Management.
+
+---
+
+### DataValidation Layer — Joi Schema Validation
+
+The DataValidation Layer is responsible for validating all data received from external sources before it is used anywhere in the application. It is implemented using Joi 17.13 and operates exclusively at the boundary between the ApiClients Layer and the rest of the application.
+
+Each API response shape has a corresponding Joi schema. When an ApiClient receives a response, it passes the raw payload through the appropriate schema before converting it into a typed Model instance. If the payload does not conform to the schema — a missing required field, an unexpected type, a value outside a permitted range — validation throws an error that is caught by the ExceptionHandling Layer. This prevents malformed or unexpected data from propagating into the Services or Components layers, where it would cause unpredictable runtime behavior.
+
+Validation schemas are colocated with the ApiClient classes they serve and are exported so they can be reused in unit tests to verify that mock responses conform to the expected contract.
+
+---
+
+### State Management Layer — Angular Signals + RxJS
+
+The State Management Layer holds the client-side application state that must be shared across multiple components or persisted across navigation events within a session. In Angular 19.2, this is implemented using Angular Signals for synchronous, fine-grained reactive state, complemented by RxJS BehaviorSubjects for state that originates from asynchronous streams.
+
+The state managed at this layer includes the authenticated user identity and role, the currently active declaration job and its status, the list of DUA sections and fields for the active result, and any field-level edits made by the user before downloading. Components and services read from this layer via signal reads or observable subscriptions and write to it only through well-defined update functions, preventing uncontrolled mutation.
+
+This layer is accessible from all other layers, which allows, for example, the ProcessingStatusService to write a new stage status update that is immediately reflected in the ProcessMonitoringPage component without any explicit event passing between them.
+
+---
+
+### Notification Service Layer — Asynchronous Event Handling via AWS API Gateway Callbacks
+
+Because document processing is a long-running asynchronous operation — potentially spanning several minutes as AWS Textract and AWS Bedrock work through the source documents — the frontend cannot rely on simple synchronous request-response cycles for status updates. The Notification Service Layer handles this by implementing a callback-based subscription model.
+
+When the DeclarationService submits a new processing job to the backend, it registers a callback endpoint provided by AWS API Gateway's WebSocket API. The backend Lambda functions publish stage completion events to this WebSocket connection as each processing stage finishes. The Notification Service Layer in the frontend maintains the WebSocket connection, receives these events, and dispatches them to the appropriate RxJS subjects in the State Management Layer.
+
+Other layers subscribe to the Notification Service by providing a handler function that is invoked when a specific event type is received. This decouples the event producer (the backend Lambda pipeline) from the event consumers (the ProcessingStatusService, the ResultService) without requiring any polling. When the WebSocket connection is lost due to a network interruption, the Notification Service Layer automatically attempts reconnection with exponential backoff and notifies the user through the ExceptionHandling Layer if the connection cannot be restored within a defined timeout.
+
+---
+
+### Exception Handling Layer — Shared Error Management
+
+The ExceptionHandling Layer is a shared cross-cutting layer accessible from all other layers. It is implemented as a combination of an Angular `ErrorHandler` override (for uncaught runtime exceptions) and an RxJS `catchError` operator factory (for observable pipeline errors).
+
+When any layer encounters an error — a failed API call, a Joi validation rejection, a WebSocket disconnection, an unexpected null value — it pipes the error through the ExceptionHandling Layer. This layer classifies the error by type: network errors, authentication errors (401/403, triggering a re-authentication flow), validation errors (logged as warnings with the offending payload), and unexpected application errors (logged as critical events and surfaced to the user as a generic error notification).
+
+Error classification determines the recovery strategy: silent retry, redirect to login, display of a user-facing error message, or escalation to the Logs Layer. This centralization ensures that error handling behavior is consistent across the entire application and that no error is silently swallowed.
+
+---
+
+### Logs Layer — AWS CloudWatch via ApiClients
+
+The Logs Layer provides structured logging classes used by every other layer to register system events. It exposes three severity levels — `info`, `warn`, and `error` — each accepting a structured payload that includes the event category, the affected layer, a correlation ID tied to the current declaration job, the authenticated user identity, and a timestamp.
+
+Log entries are batched and sent asynchronously to AWS CloudWatch through the BackendApiClient, which forwards them to a dedicated logging Lambda function that writes to CloudWatch Logs. AWS X-Ray traces are automatically attached to outbound API calls made through the ApiClients Layer, providing distributed tracing across the frontend SSR server, AWS API Gateway, and the backend Lambda functions.
+
+The Logs Layer never blocks the calling layer. Log dispatch is fire-and-forget, implemented as a non-awaited observable that the layer subscribes to internally. If a log write fails, the failure is recorded locally in the browser console but does not propagate as an error to the calling layer, preventing logging failures from affecting application functionality.
+
+---
+
+### Layer Interaction Diagram
+
+```
+       Browser
+          |
+          v
+  Express.js SSR (Node.js 22 LTS)
+          |
+          v
+  Authentication Layer (MSAL + Azure Entra ID)
+          |
+          v
+  Components Layer (Angular 19.2 — Atomic Design)
+  Atoms → Molecules → Organisms → Templates → Pages
+          |
+          v
+       Hooks Layer (Angular DI + RxJS)
+          |
+          v
+     Services Layer
+          |
+    +-----+------+----------+
+    |            |           |
+  Utils      ApiClients   Settings
+                |               \
+                |           Azure Key Vault
+                v
+       DataValidation (Joi 17.13)
+                |
+                v
+        External APIs
+        (AWS API Gateway → Lambda → Textract / Bedrock)
+                |
+                v
+    Notification Service (AWS WebSocket API)
+
+Shared across all layers:
+  - Models (TypeScript interfaces)
+  - State Management (Angular Signals + RxJS)
+  - Exception Handling (Angular ErrorHandler + catchError)
+  - Logs (AWS CloudWatch + X-Ray via ApiClients)
+
+CI/CD:
+  GitLab Repository
+       |
+  GitLab CI/CD 17.5 Pipelines
+       |
+  +----+----+----------+
+  Dev    Staging    Production
+       |
+  AWS Lambda + AWS CloudFront + AWS API Gateway
+```
 
 ## 1.6 Design patterns:
 
