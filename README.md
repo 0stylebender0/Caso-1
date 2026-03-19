@@ -477,4 +477,35 @@ CI/CD:
 
 ## 1.6 Design patterns:
 
+**Builder + Strategy — Document Processors**
+
+Each source document type (`.docx`, `.xlsx`, `.pdf`, `.jpg`, `.png`) requires a different reading and parsing strategy. The Strategy Pattern defines a common `DocumentProcessor` interface with a `process(file)` method, and each concrete processor (WordProcessor, ExcelProcessor, PdfProcessor, ImageProcessor) implements it independently. The Builder Pattern is used to assemble the correct processor chain for a given job based on the file types found in the source folder, without the calling layer needing to know which processors are involved.
+
+---
+
+**Observer — NotificationService**
+
+The NotificationService implements the Observer Pattern to distribute asynchronous processing stage events received from the AWS WebSocket API. Services such as ProcessingStatusService and ResultService register as subscribers and are notified when a new stage completion event is emitted. This decouples the WebSocket event source from the consumers, allowing new subscribers to be added without modifying the notification infrastructure.
+
+---
+
+**Adapter — Output Format Writers**
+
+When generating the pre-filled DUA `.docx` file, different field types require different document constructs. The Adapter Pattern is applied through a `FormatAdapter` interface that normalizes the output of the AI extraction pipeline into a common write contract. Concrete adapters — `ParagraphAdapter`, `BulletsAdapter`, `TableAdapter`, `LabelAdapter`, and `AmountAdapter` — each translate a DUA field value into the appropriate Word document structure, isolating the document generation logic from the data extraction logic.
+
+---
+
+**Singleton — Shared Infrastructure Classes**
+
+The following classes are instantiated once and shared across all layers for the lifetime of the application session:
+
+- `ExceptionHandlingService` — centralized error classification and recovery
+- `DocumentParsers` — one parser instance per file type, reused across jobs
+- `Utils` — stateless pure function library, single shared reference
+- `StateManagement` — single source of truth for application state via Angular Signals
+- `ApiClients` — one client instance per external system (BackendApiClient, EntraIdApiClient)
+- `SettingsService` — environment configuration loaded once at SSR startup from Azure Key Vault
+
+In Angular 19.2, singleton scope is enforced by declaring these classes with `providedIn: 'root'`, ensuring the dependency injection container creates exactly one instance per application lifecycle.
+
 # BackEnd design
