@@ -424,6 +424,8 @@ The Logs Layer never blocks the calling layer. Log dispatch is fire-and-forget, 
 
 ### Layer Interaction Diagram
 
+![Layer Interaction Diagram](/media/layered-design-diagram.jpg)
+
 ```
        Browser
           |
@@ -474,6 +476,8 @@ CI/CD:
        |
   AWS Lambda + AWS CloudFront + AWS API Gateway
 ```
+
+
 
 ## 1.6 Design patterns:
 
